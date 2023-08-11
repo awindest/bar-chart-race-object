@@ -1,0 +1,1 @@
+awk -F ',' '{print }' brand_values.csv | sort| uniq | p

@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+
+<head>
+   <title>Bar Chart Race Object</title>
+   <meta charset="utf-8">
+   <script src="https://d3js.org/d3.v7.min.js"></script>
+   <style>
+      @import url('https://fonts.googleapis.com/css2?family=Exo:wght@300&display=swap');
+
+      text {
+         font-size: 16px;
+         font-family: Exo, sans-serif;
+      }
+
+      text.title {
+         font-size: 24px;
+         font-weight: 500;
+      }
+
+      text.subTitle {
+         font-weight: 500;
+         fill: #777777;
+      }
+
+      text.caption {
+         font-weight: 400;
+         font-size: 14px;
+         fill: #777777;
+      }
+
+      text.label {
+         /* bar labels with source system */
+         font-weight: 600;
+         fill: #000000;
+         /* fill: #777777; */
+
+      }
+
+      text.valueLabel {
+         font-weight: 300;
+      }
+
+      text.yearText {
+         font-size: 64px;
+         font-weight: 700;
+         opacity: 0.25;
+      }
+
+      .tick text {
+         fill: #777777;
+      }
+
+      .xAxis .tick:nth-child(2) text {
+         text-anchor: start;
+      }
+
+      .tick line {
+         shape-rendering: CrispEdges;
+         stroke: #dddddd;
+      }
+
+      .tick line.origin {
+         stroke: #aaaaaa;
+      }
+
+      path.domain {
+         display: none;
+      }
+   </style>
+</head>
+
+<body>
+   <script>
+      const height = 600;
+      const width = 760;
+      const svg = d3.select("body").append("svg")
+         .attr("width", width)
+         .attr("height", height);
+
+      const tickDuration = 500;
+
+      const top_number = 12;
+
+      const margin = {
+         top: 80,
+         right: 0,
+         bottom: 5,
+         left: 0
+      };
+
+      let barPadding = (height - (margin.bottom + margin.top)) / (top_number * 5);
+
+      const title = svg.append('text')
+         .attr('class', 'title')
+         .attr('y', 24)
+         .html('Rows Processed by Source System');
+
+      const subTitle = svg.append('text')
+         .attr("class", "subTitle")
+         .attr("y", 55)
+         .html("Number of rows or objects, in millions");
+
+      const caption = svg.append('text')
+         .attr('class', 'caption')
+         .attr('x', width)
+         .attr('y', height - 5)
+         .style('text-anchor', 'end')
+         .html('Source: Data Quality Data Mart');
+
+      let year = 2010; //start year of animation
+      const endYear = 2023 //end year of animation
+
+      d3.csv('brand_values.csv').then(data => {
+         //if (error) throw error;
+
+         console.log(data);
+
+         data.forEach(d => {
+            d.value = +d.value,
+               d.lastValue = +d.lastValue,
+               d.value = isNaN(d.value) ? 0 : d.value,
+               d.year = +d.year + 5, // arbitrary time shift to end at 2023
+               console.log('Year::', d.year)
+            d.colour = d3.hsl(Math.random() * 360, 0.75, 0.75)
+         })
+
+         console.log(data);
+
+         let yearSlice = data.filter(d => d.year == year && !isNaN(d.value))
+            .sort((a, b) => b.value - a.value)
+            .slice(0, top_number);
+
+         yearSlice.forEach((d, i) => d.rank = i);
+
+         console.log('yearSlice: ', yearSlice)
+
+         let x = d3.scaleLinear()
+            .domain([0, d3.max(yearSlice, d => d.value)])
+            .range([margin.left, width - margin.right - 65]);
+
+         let y = d3.scaleLinear()
+            .domain([top_number, 0])
+            .range([height - margin.bottom, margin.top]);
+
+         let xAxis = d3.axisTop()
+            .scale(x)
+            .ticks(width > 500 ? 5 : 2)
+            .tickSize(-(height - margin.top - margin.bottom))
+            .tickFormat(d => d3.format(',')(d));
+
+         svg.append('g')
+            .attr('class', 'axis xAxis')
+            .attr('transform', `translate(0, ${margin.top})`)
+            .call(xAxis)
+            .selectAll('.tick line')
+            .classed('origin', d => d == 0);
+
+         // filter stuff
+         /* For the drop shadow filter... */
+         const defs = svg.append('defs');
+
+         const filter = defs.append('filter')
+            .attr('id', 'dropshadow')
+
+         filter.append('feGaussianBlur')
+            .attr('in', 'SourceAlpha')
+            .attr('stdDeviation', 2)
+            .attr('result', 'blur');
+         filter.append('feOffset')
+            .attr('in', 'blur')
+            .attr('dx', 2)
+            .attr('dy', 3)
+            .attr('result', 'offsetBlur');
+
+         const feMerge = filter.append('feMerge');
+
+         feMerge.append('feMergeNode')
+            .attr('in", "offsetBlur')
+         feMerge.append('feMergeNode')
+            .attr('in', 'SourceGraphic');
+         // end filter stuff
+
+         svg.selectAll('rect.bar')
+            .data(yearSlice, d => d.name)
+            .enter()
+            .append('rect')
+            .attr('class', 'bar')
+            .attr('x', x(0) + 1)
+            .attr('width', d => x(d.value) - x(0) - 1)
+            .attr('y', d => y(d.rank) + 5)
+            .attr('height', y(1) - y(0) - barPadding)
+            .attr('rx', 15)
+            .attr('ry', 15)
+            .style('fill', d => d.colour)
+            .attr('filter', 'url(#dropshadow)')
+
+         svg.selectAll('text.label')
+            .data(yearSlice, d => d.name)
+            .enter()
+            .append('text')
+            .attr('class', 'label')
+            .attr('x', d => x(d.value) - 8)
+            .attr('y', d => y(d.rank) + 5 + ((y(1) - y(0)) / 2) + 1)
+            .style('text-anchor', 'end')
+            .html(d => d.name);
+
+         svg.selectAll('text.valueLabel')
+            .data(yearSlice, d => d.name)
+            .enter()
+            .append('text')
+            .attr('class', 'valueLabel')
+            .attr('x', d => x(d.value) + 5)
+            .attr('y', d => y(d.rank) + 5 + ((y(1) - y(0)) / 2) + 1)
+            .text(d => d3.format(',.0f')(d.lastValue));
+
+         let yearText = svg.append('text')
+            .attr('class', 'yearText')
+            .attr('x', width - margin.right)
+            .attr('y', height - 25)
+            .style('text-anchor', 'end')
+            .html('Stardate: ' + ~~year) // ~~ is a double NOT bitwise operator faster than Math.floor()
+            // .html('Stardate: ' + ((year/86400000) + 2440587.5)-2400000)
+            .call(halo, 10);
+
+         let ticker = d3.interval(e => {
+
+            yearSlice = data.filter(d => d.year == year && !isNaN(d.value))
+               .sort((a, b) => b.value - a.value)
+               .slice(0, top_number);
+
+            yearSlice.forEach((d, i) => d.rank = i);
+
+            //console.log('IntervalYear: ', yearSlice);
+
+            x.domain([0, d3.max(yearSlice, d => d.value)]);
+
+            svg.select('.xAxis')
+               .transition()
+               .duration(tickDuration)
+               .ease(d3.easeLinear)
+               .call(xAxis);
+
+            let bars = svg.selectAll('.bar').data(yearSlice, d => d.name);
+
+            bars
+               .enter()
+               .append('rect')
+               .attr('class', d => `bar ${d.name.replace(/\s/g, '_')}`)
+               .attr('x', x(0) + 1)
+               .attr('width', d => x(d.value) - x(0) - 1)
+               .attr('y', d => y(top_number + 1) + 5)
+               .attr('height', y(1) - y(0) - barPadding)
+               .attr('rx', 15)
+               .attr('ry', 15)
+               .style('fill', d => d.colour)
+               .attr('filter', 'url(#dropshadow)')
+               .transition()
+               .duration(tickDuration)
+               .ease(d3.easeLinear)
+               .attr('y', d => y(d.rank) + 5);
+
+            bars
+               .transition()
+               .duration(tickDuration)
+               .ease(d3.easeLinear)
+               .attr('width', d => x(d.value) - x(0) - 1)
+               .attr('y', d => y(d.rank) + 5);
+
+            bars
+               .exit()
+               .transition()
+               .duration(tickDuration)
+               .ease(d3.easeLinear)
+               .attr('width', d => x(d.value) - x(0) - 1)
+               .attr('y', d => y(top_number + 1) + 5)
+               .remove();
+
+            let labels = svg.selectAll('.label')
+               .data(yearSlice, d => d.name);
+
+            labels
+               .enter()
+               .append('text')
+               .attr('class', 'label')
+               .attr('x', d => x(d.value) - 8)
+               .attr('y', d => y(top_number + 1) + 5 + ((y(1) - y(0)) / 2))
+               .style('text-anchor', 'end')
+               .html(d => d.name)
+               .transition()
+               .duration(tickDuration)
+               .ease(d3.easeLinear)
+               .attr('y', d => y(d.rank) + 5 + ((y(1) - y(0)) / 2) + 1);
+
+
+            labels
+               .transition()
+               .duration(tickDuration)
+               .ease(d3.easeLinear)
+               .attr('x', d => x(d.value) - 8)
+               .attr('y', d => y(d.rank) + 5 + ((y(1) - y(0)) / 2) + 1);
+            console.log("y's = ", y(1), y(0))
+            labels
+               .exit()
+               .transition()
+               .duration(tickDuration)
+               .ease(d3.easeLinear)
+               .attr('x', d => x(d.value) - 8)
+               .attr('y', d => y(top_number + 1) + 5)
+               .remove();
+
+
+
+            let valueLabels = svg.selectAll('.valueLabel').data(yearSlice, d => d.name);
+
+            valueLabels
+               .enter()
+               .append('text')
+               .attr('class', 'valueLabel')
+               .attr('x', d => x(d.value) + 5)
+               .attr('y', d => y(top_number + 1) + 5)
+               .text(d => d3.format(',.0f')(d.lastValue))
+               .transition()
+               .duration(tickDuration)
+               .ease(d3.easeLinear)
+               .attr('y', d => y(d.rank) + 5 + ((y(1) - y(0)) / 2) + 1);
+
+            valueLabels
+               .transition()
+               .duration(tickDuration)
+               .ease(d3.easeLinear)
+               .attr('x', d => x(d.value) + 5)
+               .attr('y', d => y(d.rank) + 5 + ((y(1) - y(0)) / 2) + 1)
+               .tween("text", function (d) {
+                  let i = d3.interpolateRound(d.lastValue, d.value);
+                  return function (t) {
+                     this.textContent = d3.format(',')(i(t));
+                  };
+               });
+
+
+            valueLabels
+               .exit()
+               .transition()
+               .duration(tickDuration)
+               .ease(d3.easeLinear)
+               .attr('x', d => x(d.value) + 5)
+               .attr('y', d => y(top_number + 1) + 5)
+               .remove();
+
+            yearText.html('Stardate: ' + ~~year)
+            // yearText.html('Stardate: ' + ~~((year/86400000) + 2440587.5)-2400000)
+
+            if (year == endYear) ticker.stop(); // stop animation
+            year = d3.format('.1f')((+year) + 0.1);
+         }, tickDuration);
+
+      }); // end of d3.csv
+
+      const halo = function (text, strokeWidth) {
+         text.select(function () { return this.parentNode.insertBefore(this.cloneNode(true), this); })
+            .style('fill', '#ffffff')
+            .style('stroke', '#ffffff')
+            .style('stroke-width', strokeWidth)
+            .style('stroke-linejoin', 'round')
+            .style('opacity', 1);
+
+      }
+
+
+   </script>
+</body>
